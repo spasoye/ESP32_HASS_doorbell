@@ -4,6 +4,7 @@ import network
 import umqtt.simple as mqtt
 import config
 import json
+import ubinascii
 
 import asyncio
 from camera import Camera, FrameSize, PixelFormat
@@ -106,10 +107,46 @@ button = machine.Pin(button_pin, machine.Pin.IN, machine.Pin.PULL_UP)
 
 # Variable to track the last time the button was pressed
 last_press_time = 0
-debounce_delay = 200  # Debounce delay in milliseconds
+debounce_delay = 50  # Debounce delay in milliseconds
 
 def mqtt_discovery():
+    discovery_payload = {
+        "device": {
+            "identifiers": ["0AFFD2"],  # Unique device identifier
+            "name": "foobar",          # Device name
+            "manufacturer": "ESP32",   # Optional
+            "model": "CustomDevice"    # Optional
+        },
+        "o": {  # Device metadata (optional)
+            "name": "foobar"
+        },
+        "cmps": {  # Components of the device
+            "bla1": {  # Button trigger
+                "p": "device_automation",
+                "automation_type": "trigger",
+                "payload": "short_press",
+                "topic": "foobar/triggers/button1",
+                "type": "button_short_press",
+                "subtype": "button_1"
+            },
+            "bla2": {  # Environment sensor
+                "p": "sensor",
+                "state_topic": "foobar/sensor/sensor1",
+                "unique_id": "bla_sensor001",
+                "name": "Environment Sensor",
+                "unit_of_measurement": "°C",
+                "value_template": '{{ value_json.temperature }}'
+            }
+        }
+    }
 
+    # Publish the combined discovery payload
+    discovery_topic = "homeassistant/device/0AFFD2/config"
+    print("Payload size: ", len(json.dumps(discovery_payload)))
+    print("Sending combined discovery payload:\n", bytes(json.dumps(discovery_payload),'utf-8'))
+    
+    mqtt_client.publish(discovery_topic, bytes(json.dumps(discovery_payload),'utf-8'))
+'''
     device_info = {
         "identifiers": ["0AFFD2"],  # Unique identifier for the device
         "name": "foobar",          # Human-readable name
@@ -145,7 +182,7 @@ def mqtt_discovery():
     #json_payload = json.dumps(discovery_data)
     #print("Sending discovery: \n", json_payload)
     #mqtt_client.publish(discovery_topic, json_payload, retain=True)
-
+'''
 # Function to run when the button is pressed
 def button_pressed_callback(pin):
     global last_press_time
@@ -153,8 +190,8 @@ def button_pressed_callback(pin):
     if pin.value() == 0:  # Falling edge (pressed)
         if current_time - last_press_time > debounce_delay:
             last_press_time = current_time  # Update the last press time
-            print("Button was pressed!")
-            mqtt_client.publish(f"{DEVICE_NAME}/state/button", "PRESS")
+            print("Button was pressed! ")
+            mqtt_client.publish(f"foobar/triggers/button1", "short_press")
     else:
         if current_time - last_press_time > debounce_delay:
             last_press_time = current_time  # Update the last press time
