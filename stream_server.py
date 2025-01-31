@@ -2,6 +2,7 @@ import asyncio
 from camera import Camera, FrameSize, PixelFormat
 
 cam = Camera(frame_size=FrameSize.VGA, pixel_format=PixelFormat.JPEG, jpeg_quality=85, init=False)
+html = None
 
 async def stream_camera(writer):
     try:
@@ -66,7 +67,9 @@ async def handle_client(reader, writer):
                 await writer.drain()
 
         else:
+            global html
             writer.write('HTTP/1.1 200 OK\r\nContent-Type: text/html\r\n\r\n'.encode())
+            writer.write(html.encode())
             await writer.drain()
     except Exception as e:
         print(f"Error: {e}")
@@ -75,7 +78,15 @@ async def handle_client(reader, writer):
         await writer.wait_closed()
 
 async def start_server(ip, port):
+    try:
+        with open("CameraSettings.html", 'r') as file:
+            global html
+            html = file.read()
+    except Exception as e:
+        print("Error reading CameraSettings.html file. You might forgot to copy it from the examples folder.")
+        raise e
+
     server = await asyncio.start_server(handle_client, ip, port)
     print(f"Server is running on {ip}:{port}")
     async with server:
-        await server.serve_forever()
+        await asyncio.sleep(3600)
