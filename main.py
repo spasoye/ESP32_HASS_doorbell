@@ -17,7 +17,7 @@ BUTTON_PIN = 0  # GPIO Pin where button is connected
 MQTT_CLIENT_ID = ubinascii.hexlify(machine.unique_id()).decode()
 
 # Topics for MQTT auto-discovery
-MQTT_DISCOVERY_TOPIC = f'homeassistant/sensor/{DEVICE_NAME}/config'
+MQTT_DISCOVERY_TOPIC = f'homeassistant/device/{DEVICE_NAME}/config'
 MQTT_BUTTON_TOPIC = f'{DEVICE_NAME}/button'
 
 # Create a button object
@@ -31,29 +31,45 @@ def mqtt_discovery():
     discovery_payload = {
         "device": {
             "identifiers": ["0AFFD2"],  # Unique device identifier
-            "name": "foobar",          # Device name
+            "name": "doorbell",          # Device name
             "manufacturer": "ESP32",   # Optional
             "model": "CustomDevice"    # Optional
         },
         "o": {  # Device metadata (optional)
-            "name": "foobar"
+            "name": "doorbell"
         },
         "cmps": {  # Components of the device
-            "bla1": {  # Button trigger
+            "button": {  # Button trigger
                 "p": "device_automation",
                 "automation_type": "trigger",
                 "payload": "short_press",
-                "topic": "foobar/triggers/button1",
+                "topic": "doorbell/triggers/button1",
                 "type": "button_short_press",
                 "subtype": "button_1"
             },
-            "bla2": {  # Environment sensor
+            "temp": {  # Environment sensor
                 "p": "sensor",
-                "state_topic": "foobar/sensor/sensor1",
-                "unique_id": "bla_sensor001",
-                "name": "Environment Sensor",
-                "unit_of_measurement": "°C",
+                "state_topic": "doorbell/env_sens/temp",
+                "unique_id": "doorbell_temp",
+                "name": "Doorbell temperature",
+                "unit_of_measurement": "%",
                 "value_template": '{{ value_json.temperature }}'
+            },
+            "humd": {  # Environment sensor
+                "p": "sensor",
+                "state_topic": "doorbell/env_sens/humd",
+                "unique_id": "doorbell_hum",
+                "name": "Doorbell humidity",
+                "unit_of_measurement": "%",
+                "value_template": '{{ value_json.humidity }}'
+            },
+            "press": {  # Environment sensor
+                "p": "sensor",
+                "state_topic": "doorbell/env_sens/press",
+                "unique_id": "doorbell_press",
+                "name": "Doorbell pressure",
+                "unit_of_measurement": "hPa",
+                "value_template": '{{ value_json.pressure }}'
             }
         }
     }
@@ -118,7 +134,6 @@ def button_pressed_callback(pin):
         
 # Connect to Wi-Fi
 def connect_wifi():
-    global wlan
     wlan = network.WLAN(network.STA_IF)
     wlan.active(True)
     wlan.connect(config.SSID, config.PASSWORD)
