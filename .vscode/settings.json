@@ -1,0 +1,3 @@
+{
+    "python.analysis.extraPaths": ["/home/ivan/apps/thonny/lib/python3.10/site-packages/thonny/plugins/micropython/base_api_stubs", "/home/ivan/projects/micropython_projects/esp32_HA_doorbell/libs/bme280"]
+}
