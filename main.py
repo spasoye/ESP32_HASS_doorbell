@@ -1,27 +1,31 @@
 import machine
 import time
 import network
-import umqtt.simple as mqtt
+import umqtt.robust as mqtt
 import config
 import json
 import ubinascii
 
 from stream_server import start_server
 
+import bme280_if
+
 # ---- Doorbell button ---- 
 
 # Define the GPIO pin for the button
-button_pin = 20  
-DEVICE_NAME = 'doorbell_device'
-BUTTON_PIN = 0  # GPIO Pin where button is connected
-MQTT_CLIENT_ID = ubinascii.hexlify(machine.unique_id()).decode()
+button_pin = 20
+
+DEVICE_ID = ubinascii.hexlify(machine.unique_id()).decode()
 
 # Topics for MQTT auto-discovery
-MQTT_DISCOVERY_TOPIC = f'homeassistant/device/{DEVICE_NAME}/config'
-MQTT_BUTTON_TOPIC = f'{DEVICE_NAME}/button'
+MQTT_DISCOVERY_TOPIC = f'homeassistant/device/{DEVICE_ID}/config'
+
 
 # Create a button object
 button = machine.Pin(button_pin, machine.Pin.IN, machine.Pin.PULL_UP)
+
+# initialize BME380
+bme280_if.sensor_init()
 
 # Variable to track the last time the button was pressed
 last_press_time = 0
@@ -52,8 +56,8 @@ def mqtt_discovery():
                 "state_topic": "doorbell/env_sens/temp",
                 "unique_id": "doorbell_temp",
                 "name": "Doorbell temperature",
-                "unit_of_measurement": "%",
-                "value_template": '{{ value_json.temperature }}'
+                "unit_of_measurement": "°C",
+                "value_template": '{{ value }}'
             },
             "humd": {  # Environment sensor
                 "p": "sensor",
@@ -61,7 +65,7 @@ def mqtt_discovery():
                 "unique_id": "doorbell_hum",
                 "name": "Doorbell humidity",
                 "unit_of_measurement": "%",
-                "value_template": '{{ value_json.humidity }}'
+                "value_template": '{{ value }}'
             },
             "press": {  # Environment sensor
                 "p": "sensor",
@@ -69,54 +73,17 @@ def mqtt_discovery():
                 "unique_id": "doorbell_press",
                 "name": "Doorbell pressure",
                 "unit_of_measurement": "hPa",
-                "value_template": '{{ value_json.pressure }}'
+                "value_template": '{{ value }}'
             }
         }
     }
 
     # Publish the combined discovery payload
-    discovery_topic = "homeassistant/device/0AFFD2/config"
     print("Payload size: ", len(json.dumps(discovery_payload)))
     print("Sending combined discovery payload:\n", bytes(json.dumps(discovery_payload),'utf-8'))
     
-    mqtt_client.publish(discovery_topic, bytes(json.dumps(discovery_payload),'utf-8'))
-'''
-    device_info = {
-        "identifiers": ["0AFFD2"],  # Unique identifier for the device
-        "name": "foobar",          # Human-readable name
-        "manufacturer": "ESP32",   # Optional additional info
-        "model": "CustomDevice"    # Optional model information
-    }
+    mqtt_client.publish(MQTT_DISCOVERY_TOPIC, bytes(json.dumps(discovery_payload),'utf-8'))
 
-    # Discovery payload for the button trigger
-    button_payload = {
-        "automation_type": "trigger",
-        "topic": "triggers/button1",
-        "payload": "short_press",
-        "type": "button_short_press",
-        "subtype": "button_1",
-        "device": device_info,  # Shared device information
-    }
-
-    # Discovery payload for the sensor
-    sensor_payload = {
-        "name": "Test Sensor",
-        "state_topic": "sensor/sensor1",
-        "unique_id": "bla_sensor001",
-        "device": device_info,  # Shared device information
-    }
-
-    # Publish the discovery messages
-    print("Sending discovery for button trigger:\n", json.dumps(button_payload))
-    mqtt_client.publish("homeassistant/device_automation/foobar_button/config", json.dumps(button_payload))
-
-    print("Sending discovery for sensor:\n", json.dumps(sensor_payload))
-    mqtt_client.publish("homeassistant/sensor/foobar_sensor/config", json.dumps(sensor_payload))
-    
-    #json_payload = json.dumps(discovery_data)
-    #print("Sending discovery: \n", json_payload)
-    #mqtt_client.publish(discovery_topic, json_payload, retain=True)
-'''
 # Function to run when the button is pressed
 def button_pressed_callback(pin):
     global last_press_time
@@ -125,12 +92,19 @@ def button_pressed_callback(pin):
         if current_time - last_press_time > debounce_delay:
             last_press_time = current_time  # Update the last press time
             print("Button was pressed! ")
-            mqtt_client.publish(f"foobar/triggers/button1", "short_press")
-    else:
-        if current_time - last_press_time > debounce_delay:
-            last_press_time = current_time  # Update the last press time
-            print("Button released!")
-            mqtt_client.publish(f"{DEVICE_NAME}/state/button", "released")
+            mqtt_client.publish(f"doorbell/triggers/button1", "short_press")
+
+            # TODO do this periodicaly with timer handler
+            temp, press, humd = bme280_if.read_sensor()
+            
+            print("Temperature: ", temp)
+            print("Pressure: ", press)
+            print("Humidity: ", humd)
+            
+            mqtt_client.publish(f"doorbell/env_sens/temp", temp)
+            mqtt_client.publish(f"doorbell/env_sens/humd", humd)
+            mqtt_client.publish(f"doorbell/env_sens/press", press)
+
         
 # Connect to Wi-Fi
 def connect_wifi():
@@ -154,6 +128,8 @@ mqtt_discovery()
 
 # Attach an interrupt to the button pin
 button.irq(trigger=machine.Pin.IRQ_FALLING | machine.Pin.IRQ_RISING, handler=button_pressed_callback)
+
+bme280_if.sensor_init()
 
 try:
     import asyncio
