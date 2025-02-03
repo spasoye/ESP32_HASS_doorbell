@@ -5,10 +5,12 @@ import umqtt.robust as mqtt
 import config
 import json
 import ubinascii
+import asyncio
 
 from stream_server import start_server
 
 import bme280_if
+import gc
 
 # ---- Doorbell button ---- 
 
@@ -20,18 +22,26 @@ DEVICE_ID = ubinascii.hexlify(machine.unique_id()).decode()
 # Topics for MQTT auto-discovery
 MQTT_DISCOVERY_TOPIC = f'homeassistant/device/{DEVICE_ID}/config'
 
-
-# Create a button object
-button = machine.Pin(button_pin, machine.Pin.IN, machine.Pin.PULL_UP)
-
-# initialize BME380
-bme280_if.sensor_init()
-
 # Variable to track the last time the button was pressed
 last_press_time = 0
 debounce_delay = 50  # Debounce delay in milliseconds
 
-def mqtt_discovery():
+mqtt_client = None
+
+def _mqtt_discovery():
+    
+    """
+    Publishes a combined discovery payload for all components of the doorbell device to the MQTT broker.
+
+    This function is called once at startup and is responsible for publishing the configuration of the device to the MQTT broker.
+
+    The payload is JSON encoded and contains the following information:
+    - Device metadata (optional)
+    - Components of the device (e.g. button, environment sensors)
+
+    The payload is published to the topic defined by the MQTT_DISCOVERY_TOPIC constant.
+    """
+
     discovery_payload = {
         "device": {
             "identifiers": ["0AFFD2"],  # Unique device identifier
@@ -85,7 +95,19 @@ def mqtt_discovery():
     mqtt_client.publish(MQTT_DISCOVERY_TOPIC, bytes(json.dumps(discovery_payload),'utf-8'))
 
 # Function to run when the button is pressed
-def button_pressed_callback(pin):
+def _button_pressed_callback(pin):
+    """
+    Called when the button is pressed. Debounces the button press to prevent multiple presses when the button is held down.
+    
+    Publishes a message to the MQTT server when the button is pressed. Also reads the BME280 sensor and publishes the values to the MQTT server.
+    
+    Args:
+        pin (Pin): The pin object representing the button.
+        
+    Returns:
+        None
+    """
+
     global last_press_time
     current_time = time.ticks_ms()  # Get the current time in milliseconds
     if pin.value() == 0:  # Falling edge (pressed)
@@ -107,7 +129,18 @@ def button_pressed_callback(pin):
 
         
 # Connect to Wi-Fi
-def connect_wifi():
+def _connect_wifi():
+    """
+    Connects to a Wi-Fi network using the configured SSID and password.
+
+    Activates the WLAN interface in station mode and attempts to connect 
+    to the specified Wi-Fi network. Waits until the connection is established 
+    before returning the WLAN object.
+
+    Returns:
+        WLAN: The WLAN object after a successful connection.
+    """
+
     wlan = network.WLAN(network.STA_IF)
     wlan.active(True)
     wlan.connect(config.SSID, config.PASSWORD)
@@ -116,27 +149,58 @@ def connect_wifi():
     print("Connected to Wi-Fi")
     return wlan
 
+async def _memory_cleanup() -> None:
+    """
+    Runs a periodic garbage collection to free up memory.
 
-# Connect to Wi-Fi
-connect_wifi()
+    This is necessary because the camera module allocates memory for the frames
+    and does not release it back to the system. This can lead to a memory leak
+    over time. The garbage collector is run every 5 minutes to clean up unused
+    memory.
+    """
+    while True:
+        gc.collect()
+        await asyncio.sleep(300)
 
-mqtt_client = mqtt.MQTTClient(config.MQTT_CLIENT_ID, config.MQTT_BROKER, port=config.MQTT_PORT)
-mqtt_client.connect()
+def _mqtt_setup():
+    global mqtt_client
+    mqtt_client = mqtt.MQTTClient(config.MQTT_CLIENT_ID, config.MQTT_BROKER, port=config.MQTT_PORT)
+    mqtt_client.connect()
+    print("MQTT client connected")
 
-# Publish discovery message
-mqtt_discovery()
+async def main():
+    global wlan
+    # Connect to Wi-Fi
+    wlan = _connect_wifi()
+    _mqtt_setup()
 
-# Attach an interrupt to the button pin
-button.irq(trigger=machine.Pin.IRQ_FALLING | machine.Pin.IRQ_RISING, handler=button_pressed_callback)
+    # Create a button object
+    button = machine.Pin(button_pin, machine.Pin.IN, machine.Pin.PULL_UP)
+    # Attach an interrupt to the button pin
+    button.irq(trigger=machine.Pin.IRQ_FALLING | machine.Pin.IRQ_RISING, handler=_button_pressed_callback)
 
-bme280_if.sensor_init()
+    # initialize BME380
+    bme280_if.sensor_init()
 
-try:
-    import asyncio
-    wlan = connect_wifi()
-    ip = wlan.ifconfig()[0]
-    asyncio.run(start_server(ip, 80))
-except KeyboardInterrupt:
-    print("Program stopped.")
-finally:
-    mqtt_client.disconnect()
+    # Publish discovery message
+    _mqtt_discovery()
+
+    # Start the memory cleanup task
+    asyncio.create_task(_memory_cleanup())
+
+    # Start the web server
+    await start_server(wlan.ifconfig()[0], 80)
+
+    while True:
+        await asyncio.sleep(1)
+
+
+if __name__ == "__main__":
+    try:
+        asyncio.run(main())
+    except KeyboardInterrupt:
+        print("Shuting down.")
+    finally:
+        if mqtt_client:
+            mqtt_client.disconnect()    
+            wlan.disconnect()
