@@ -7,7 +7,7 @@ import json
 import ubinascii
 import asyncio
 
-from stream_server import start_server
+from stream_server import start_server as stream_start
 
 import bme280_if
 import gc
@@ -159,8 +159,9 @@ async def _memory_cleanup() -> None:
     memory.
     """
     while True:
+        print("Memory cleanup.")
         gc.collect()
-        await asyncio.sleep(300)
+        await asyncio.sleep(100)
 
 def _mqtt_setup():
     global mqtt_client
@@ -168,7 +169,7 @@ def _mqtt_setup():
     mqtt_client.connect()
     print("MQTT client connected")
 
-async def main():
+def main():
     global wlan
     # Connect to Wi-Fi
     wlan = _connect_wifi()
@@ -189,18 +190,14 @@ async def main():
     asyncio.create_task(_memory_cleanup())
 
     # Start the web server
-    await start_server(wlan.ifconfig()[0], 80)
+    asyncio.run(stream_start(wlan.ifconfig()[0], 80))
 
-    while True:
-        await asyncio.sleep(1)
 
 
 if __name__ == "__main__":
     try:
-        asyncio.run(main())
+        main()
     except KeyboardInterrupt:
         print("Shuting down.")
-    finally:
-        if mqtt_client:
-            mqtt_client.disconnect()    
-            wlan.disconnect()
+   
+
