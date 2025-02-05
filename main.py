@@ -2,12 +2,13 @@ import machine
 import time
 import network
 import umqtt.robust as mqtt
-import config
 import json
 import ubinascii
 import asyncio
 
-from stream_server import start_server as stream_start
+import config
+from connect import connect_wifi
+from stream_server_2 import start_server
 
 import bme280_if
 import gc
@@ -170,10 +171,8 @@ def _mqtt_setup():
     print("MQTT client connected")
 
 def main():
-    global wlan
-    # Connect to Wi-Fi
-    wlan = _connect_wifi()
-    _mqtt_setup()
+    wlan = connect_wifi()
+    ip = wlan.ifconfig()[0]  # Get the assigned IP address
 
     # Create a button object
     button = machine.Pin(button_pin, machine.Pin.IN, machine.Pin.PULL_UP)
@@ -183,15 +182,16 @@ def main():
     # initialize BME380
     bme280_if.sensor_init()
 
+    _mqtt_setup()
+    
     # Publish discovery message
     _mqtt_discovery()
 
-    # Start the memory cleanup task
-    asyncio.create_task(_memory_cleanup())
-
-    # Start the web server
-    asyncio.run(stream_start(wlan.ifconfig()[0], 80))
-
+    try:
+        asyncio.run(start_server(ip))
+    except KeyboardInterrupt:
+        TODO: graceful shutdown of server
+        print("Server stopped")
 
 
 if __name__ == "__main__":

@@ -4,7 +4,9 @@ from camera import Camera, FrameSize, PixelFormat
 cam = Camera(frame_size=FrameSize.VGA, pixel_format=PixelFormat.JPEG, jpeg_quality=85, init=False)
 html = None
 
+# TODO: research more about asyncio
 async def stream_camera(writer):
+    
     try:
         cam.init()
         if not cam.get_bmp_out() and cam.get_pixel_format() != PixelFormat.JPEG:
@@ -77,7 +79,7 @@ async def handle_client(reader, writer):
         writer.close()
         await writer.wait_closed()
 
-async def start_server(ip, port):
+async def start_server(ip, port=80):
     try:
         with open("CameraSettings.html", 'r') as file:
             global html
@@ -88,5 +90,6 @@ async def start_server(ip, port):
 
     server = await asyncio.start_server(handle_client, ip, port)
     print(f"Server is running on {ip}:{port}")
-    async with server:
+    while True:
         await asyncio.sleep(3600)
+
