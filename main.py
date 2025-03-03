@@ -8,7 +8,7 @@ import asyncio
 
 import config
 from connect import connect_wifi
-from stream_server_2 import start_server
+from stream_server import start_server
 
 import bme280_if
 import gc
@@ -190,7 +190,6 @@ def main():
     try:
         asyncio.run(start_server(ip))
     except KeyboardInterrupt:
-        TODO: graceful shutdown of server
         print("Server stopped")
 
 
@@ -200,4 +199,3 @@ if __name__ == "__main__":
     except KeyboardInterrupt:
         print("Shuting down.")
    
-
