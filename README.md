@@ -3,7 +3,7 @@
 ## Overview
 
 The project is an integration for ESP32-based and cheap camera modules with Home Assistant. It utilizes a camera API to capture images or stream video. 
-Simple push button is 
+On the button press, it sends a notification to Home Assistant that triggers automation.
 BME280 temperature/humidity/pressure sensore was also implemented since I had few of them laying around and to 
 test HASS autodiscovery capabilities
  
@@ -45,6 +45,8 @@ rshell --port /dev/ttyACM0 cp -r bme280_if.py boot.py CameraSettings.html config
 
 ### Home Assistant setting 
 
+Its assumed that that Home Assistant is already installed and running.
+
 #### Installing Motioneye
 
 Motioneye open source solution that offers a practicall way to manage multiple cameras in your setup.
@@ -57,11 +59,48 @@ docker run --name="motioneye"     -p 8765:8765 -p 8081:8081 -p 8082:8082  --host
 
 You can now access Motioneye at http://localhost:8765.
 
-#### Setting up Home Assistant
+#### Installing MQTT broker
 
+You can run your MQTT broker using Docker container:
 
+```
+docker run -it -p 1883:1883 --name mosquitto -v path_to_local_config:/mosquitto/config -v path_to_local_data:/mosquitto/data -v path_to_local_log:/mosquitto/log eclipse-mosquitto
+```
 
+In Home Assistant install MQTT integration and set up the MQTT broker.
 
+#### Home Assistant automation
+
+In Home Assistant, create a new automation with the following configuration:
+
+```
+alias: doorbell
+description: ""
+triggers:
+  - domain: mqtt
+    device_id: 54571e26ccdab3cd25978897039832c3
+    type: button_short_press
+    subtype: button_1
+    trigger: device
+conditions: []
+actions:
+  - parallel:
+      - action: notify.mobile_app_pocoloco
+        metadata: {}
+        data:
+          message: anybody home ?
+          title: Ding dong
+      - action: notify.persistent_notification
+        metadata: {}
+        data:
+          message: anybody home ?
+          title: ding dong
+mode: single
+
+```
+
+When button is pressed MQTT packet is sent and Home Assistant will trigger automation, 
+which will send a notification to your mobile phone.
 
 ## Contributing
 
