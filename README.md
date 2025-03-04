@@ -1,11 +1,11 @@
 # HASS_doorbell
 
-## Overview
-
 The project is an integration for ESP32-based and cheap camera modules with Home Assistant. It utilizes a camera API to capture images or stream video. 
 On the button press, it sends a notification to Home Assistant that triggers automation.
 BME280 temperature/humidity/pressure sensore was also implemented since I had few of them laying around and to 
 test HASS autodiscovery capabilities
+
+![doorbell](pics/IMG_20250304_152458.jpg){: width="550px" }
  
 
 ## Features
