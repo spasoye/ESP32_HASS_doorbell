@@ -5,7 +5,7 @@ On the button press, it sends a notification to Home Assistant that triggers aut
 BME280 temperature/humidity/pressure sensore was also implemented since I had few of them laying around and to 
 test HASS autodiscovery capabilities
 
-![doorbell](pics/IMG_20250304_152458.jpg){: width="550px" }
+![doorbell](pics/IMG_20250304_152458.jpg)
  
 
 ## Features
