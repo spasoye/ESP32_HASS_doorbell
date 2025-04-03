@@ -2,7 +2,7 @@
 import esp
 import sys
 esp.osdebug(None)
-#import webrepl
-#webrepl.start()
+import webrepl
+webrepl.start()
 sys.path.append('/libs')
 sys.path.append('/')
