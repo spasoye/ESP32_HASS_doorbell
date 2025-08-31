@@ -96,38 +96,15 @@ def _mqtt_discovery():
     mqtt_client.publish(MQTT_DISCOVERY_TOPIC, bytes(json.dumps(discovery_payload),'utf-8'))
 
 # Function to run when the button is pressed
-def _button_pressed_callback(pin):
-    """
-    Called when the button is pressed. Debounces the button press to prevent multiple presses when the button is held down.
-    
-    Publishes a message to the MQTT server when the button is pressed. Also reads the BME280 sensor and publishes the values to the MQTT server.
-    
-    Args:
-        pin (Pin): The pin object representing the button.
-        
-    Returns:
-        None
-    """
-
+def _button_pressed_ISR(pin):
     global last_press_time
     current_time = time.ticks_ms()  # Get the current time in milliseconds
-    if pin.value() == 0:  # Falling edge (pressed)
-        if current_time - last_press_time > debounce_delay:
-            last_press_time = current_time  # Update the last press time
-            print("Button was pressed! ")
-            mqtt_client.publish(f"doorbell/triggers/button1", "short_press")
+    if time.ticks_diff(current_time, last_press_time) > debounce_delay:
+        micropython.schedule(_button_pressed_callback, 0)
+    last_press_time = current_time
 
-            # TODO do this periodicaly with timer handler
-            temp, press, humd = bme280_if.read_sensor()
-            
-            print("Temperature: ", temp)
-            print("Pressure: ", press)
-            print("Humidity: ", humd)
-            
-            mqtt_client.publish(f"doorbell/env_sens/temp", temp)
-            mqtt_client.publish(f"doorbell/env_sens/humd", humd)
-            mqtt_client.publish(f"doorbell/env_sens/press", press)
-
+def _button_pressed_callback(_): 
+    event_queue.append('button_pressed')       
         
 # Connect to Wi-Fi
 def _connect_wifi():
