@@ -5,17 +5,18 @@ import umqtt.robust as mqtt
 import json
 import ubinascii
 import asyncio
+import micropython
 
 import config
 from connect import connect_wifi
-from stream_server import start_server
 
 import bme280_if
 import gc
 
-# ---- Doorbell button ---- 
 
+# ----- Config -----
 # Define the GPIO pin for the button
+# TODO: move to config
 button_pin = 20
 
 DEVICE_ID = ubinascii.hexlify(machine.unique_id()).decode()
@@ -23,12 +24,17 @@ DEVICE_ID = ubinascii.hexlify(machine.unique_id()).decode()
 # Topics for MQTT auto-discovery
 MQTT_DISCOVERY_TOPIC = f'homeassistant/device/{DEVICE_ID}/config'
 
+# ----- Global variables -----
 # Variable to track the last time the button was pressed
 last_press_time = 0
-debounce_delay = 50  # Debounce delay in milliseconds
-
+# TODO: move to config
+debounce_delay = 100  # Debounce delay in milliseconds
 mqtt_client = None
+# TODO: reseach this
+event_queue = []
 
+# TODO: add IP address to discovery payload ?
+# TODO: move to own module
 def _mqtt_discovery():
     
     """
@@ -45,7 +51,7 @@ def _mqtt_discovery():
 
     discovery_payload = {
         "device": {
-            "identifiers": ["0AFFD2"],  # Unique device identifier
+            "identifiers": f'{DEVICE_ID}',  # Unique device identifier
             "name": "doorbell",          # Device name
             "manufacturer": "ESP32",   # Optional
             "model": "CustomDevice"    # Optional
@@ -147,32 +153,80 @@ def _mqtt_setup():
     mqtt_client.connect()
     print("MQTT client connected")
 
+# ----- Tasks -----
+async def _button_task():
+    """
+    Monitors the button state and publishes a message to the MQTT broker when the button is pressed.
+
+    This function runs in an infinite loop, checking the event queue for button press events.
+    When a button press event is detected, it publishes a message to the MQTT topic defined
+    by the BUTTON_TOPIC constant. The message payload is "short_press".
+
+    The function sleeps for 100 milliseconds between checks to avoid busy-waiting.
+    """
+    global event_queue
+    while True:
+        if event_queue:
+            event = event_queue.pop(0)
+            if event == 'button_pressed':
+                print("Button pressed!")
+                mqtt_client.publish("doorbell/triggers/button1", "short_press")
+        await asyncio.sleep(0.1)
+
+async def sens_task():
+    # initialize BME380
+    try:
+        bme280_if.sensor_init()
+    except:
+        raise Exception("BME280 not found. Check wiring.")
+
+    print("Sensor initialized")
+
+    await asyncio.sleep(2)  # wait for sensor to stabilize
+
+    while True:
+        temp, press, humd = bme280_if.read_sensor()
+        print(f"Temp: {temp} °C, Humidity: {humd} %, Pressure: {press} hPa")
+
+        mqtt_client.publish("doorbell/env_sens/temp", temp)
+        mqtt_client.publish("doorbell/env_sens/humd", humd)
+        mqtt_client.publish("doorbell/env_sens/press", press)
+        # TODO: move to config 
+        await asyncio.sleep(5)
+
 def main():
     wlan = connect_wifi()
     ip = wlan.ifconfig()[0]  # Get the assigned IP address
-
-    # Create a button object
-    button = machine.Pin(button_pin, machine.Pin.IN, machine.Pin.PULL_UP)
-    # Attach an interrupt to the button pin
-    button.irq(trigger=machine.Pin.IRQ_FALLING | machine.Pin.IRQ_RISING, handler=_button_pressed_callback)
-
-    # initialize BME380
-    bme280_if.sensor_init()
-
     _mqtt_setup()
     
     # Publish discovery message
     _mqtt_discovery()
 
+    # Create a button object
+    button = machine.Pin(0, machine.Pin.IN, machine.Pin.PULL_UP)
+    # Attach an interrupt to the button pin
+    button.irq(trigger=machine.Pin.IRQ_FALLING | machine.Pin.IRQ_RISING, handler=_button_pressed_ISR)
+
+    loop = asyncio.get_event_loop()
+    loop.create_task(_button_task())
+    loop.create_task(sens_task())
+    loop.create_task(_memory_cleanup())
+
     try:
+        from stream_server import start_server
         asyncio.run(start_server(ip))
     except KeyboardInterrupt:
         print("Server stopped")
+    
+    loop.run_forever()
 
-
+    
 if __name__ == "__main__":
     try:
         main()
     except KeyboardInterrupt:
         print("Shuting down.")
+   
+   
+   
    
