@@ -1,7 +1,19 @@
 import asyncio
 from camera import Camera, FrameSize, PixelFormat
 
-cam = Camera(frame_size=FrameSize.VGA, pixel_format=PixelFormat.JPEG, jpeg_quality=85, init=False)
+cam = Camera(data_pins=[11, 9, 8, 10, 12, 18, 17, 16],
+             vsync_pin=6,
+             href_pin=7,
+             sda_pin=4,
+             scl_pin=5,
+             pclk_pin=13,
+             xclk_pin=15,
+             xclk_freq=20000000,
+             frame_size=FrameSize.VGA,
+             pixel_format=PixelFormat.JPEG,
+             jpeg_quality=85,
+             init=False)
+
 html = None
 
 # TODO: research more about asyncio
@@ -9,8 +21,7 @@ async def stream_camera(writer):
     
     try:
         cam.init()
-        if not cam.get_bmp_out() and cam.get_pixel_format() != PixelFormat.JPEG:
-            cam.set_bmp_out(True)
+        await asyncio.sleep(1)
 
         writer.write(b'HTTP/1.1 200 OK\r\nContent-Type: multipart/x-mixed-replace; boundary=frame\r\n\r\n')
         await writer.drain()
@@ -92,4 +103,3 @@ async def start_server(ip, port=80):
     print(f"Server is running on {ip}:{port}")
     while True:
         await asyncio.sleep(3600)
-
