@@ -19,6 +19,7 @@ import gc
 # TODO: move to config
 button_pin = 20
 
+DEVICE_IP = None
 DEVICE_ID = ubinascii.hexlify(machine.unique_id()).decode()
 
 # Topics for MQTT auto-discovery
@@ -54,7 +55,8 @@ def _mqtt_discovery():
             "identifiers": f'{DEVICE_ID}',  # Unique device identifier
             "name": "doorbell",          # Device name
             "manufacturer": "ESP32",   # Optional
-            "model": "CustomDevice"    # Optional
+            "model": f'{DEVICE_ID}',    # Optional
+            #"configuration_url": f'http://{DEVICE_IP}'
         },
         "o": {  # Device metadata (optional)
             "name": "doorbell"
