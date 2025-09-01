@@ -90,7 +90,7 @@ async def handle_client(reader, writer):
         writer.close()
         await writer.wait_closed()
 
-async def start_server(ip, port=80):
+def stream_server_start(ip, port=80):
     try:
         with open("CameraSettings.html", 'r') as file:
             global html

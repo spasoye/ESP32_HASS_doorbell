@@ -197,8 +197,10 @@ async def sens_task():
         await asyncio.sleep(5)
 
 def main():
+    global DEVICE_IP
+    
     wlan = connect_wifi()
-    ip = wlan.ifconfig()[0]  # Get the assigned IP address
+    DEVICE_IP = wlan.ifconfig()[0]  # Get the assigned IP address
     _mqtt_setup()
     
     # Publish discovery message
@@ -213,10 +215,10 @@ def main():
     loop.create_task(_button_task())
     loop.create_task(sens_task())
     loop.create_task(_memory_cleanup())
-
+    
     try:
-        from stream_server import start_server
-        asyncio.run(start_server(ip))
+        from stream_server import stream_server_start 
+        loop.create_task(stream_server_start(DEVICE_IP))
     except KeyboardInterrupt:
         print("Server stopped")
     
