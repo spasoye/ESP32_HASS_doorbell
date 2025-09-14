@@ -15,10 +15,6 @@ import gc
 
 
 # ----- Config -----
-# Define the GPIO pin for the button
-# TODO: move to config
-button_pin = 20
-
 DEVICE_IP = None
 DEVICE_ID = ubinascii.hexlify(machine.unique_id()).decode()
 
@@ -29,9 +25,8 @@ MQTT_DISCOVERY_TOPIC = f'homeassistant/device/{DEVICE_ID}/config'
 # Variable to track the last time the button was pressed
 last_press_time = 0
 # TODO: move to config
-debounce_delay = 100  # Debounce delay in milliseconds
 mqtt_client = None
-# TODO: reseach this
+
 event_queue = []
 
 # TODO: add IP address to discovery payload ?
@@ -56,7 +51,7 @@ def _mqtt_discovery():
             "name": "doorbell",          # Device name
             "manufacturer": "ESP32",   # Optional
             "model": f'{DEVICE_ID}',    # Optional
-            #"configuration_url": f'http://{DEVICE_IP}'
+            "configuration_url": f'http://{DEVICE_IP}'
         },
         "o": {  # Device metadata (optional)
             "name": "doorbell"
@@ -107,7 +102,7 @@ def _mqtt_discovery():
 def _button_pressed_ISR(pin):
     global last_press_time
     current_time = time.ticks_ms()  # Get the current time in milliseconds
-    if time.ticks_diff(current_time, last_press_time) > debounce_delay:
+    if time.ticks_diff(current_time, last_press_time) > config.dbnc_delay:
         micropython.schedule(_button_pressed_callback, 0)
     last_press_time = current_time
 
@@ -194,7 +189,7 @@ async def sens_task():
         mqtt_client.publish("doorbell/env_sens/humd", humd)
         mqtt_client.publish("doorbell/env_sens/press", press)
         # TODO: move to config 
-        await asyncio.sleep(5)
+        await asyncio.sleep(config.sens_t)
 
 def main():
     global DEVICE_IP
@@ -207,7 +202,7 @@ def main():
     _mqtt_discovery()
 
     # Create a button object
-    button = machine.Pin(0, machine.Pin.IN, machine.Pin.PULL_UP)
+    button = machine.Pin(config.bell_pin , machine.Pin.IN, machine.Pin.PULL_UP)
     # Attach an interrupt to the button pin
     button.irq(trigger=machine.Pin.IRQ_FALLING | machine.Pin.IRQ_RISING, handler=_button_pressed_ISR)
 
